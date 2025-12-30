@@ -1,0 +1,7 @@
+{
+  "name": "ConsFlow - Construction ERP & CRM",
+  "description": "A comprehensive construction project management system featuring CRM, project tracking, estimation with PDF simulation, mobile-first daily reports, and an executive dashboard.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
