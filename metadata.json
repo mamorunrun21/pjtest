@@ -1,7 +1,6 @@
 {
-  "name": "ConsFlow - Construction ERP & CRM",
-  "description": "A comprehensive construction project management system featuring CRM, project tracking, estimation with PDF simulation, mobile-first daily reports, and an executive dashboard.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "ホワイトボード工程表DX",
+  "description": "4-10人規模の現場向け。スマートフォンから工程の確認・かんたん進捗更新ができるガントチャート付き工程管理アプリ。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
