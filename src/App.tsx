@@ -11,7 +11,7 @@ import { MobileTaskList } from './components/MobileTaskList';
 import { MemberManager } from './components/MemberManager';
 import { TaskEditModal } from './components/TaskEditModal';
 import { relativeTimeJapanese, formatTimestamp } from './utils/dateHelpers';
-import { ClipboardList, LayoutGrid, Users, History, Layers, CheckCircle2, CloudLightning, Info, Database, Settings } from 'lucide-react';
+import { ClipboardList, LayoutGrid, Users, History, Layers, CheckCircle2, CloudLightning, Info, Database, Settings, Server } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 
 export default function App() {
@@ -111,48 +111,54 @@ export default function App() {
         setErrorMsg(null);
         setSyncTime(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       } else {
-        // Supabase未設定時は、初回のロード時のみ初期ダミーデータをセットし、それ以外は何もしない（ローカルステートをそのまま使う）
-        if (boardData.tasks.length === 0 && boardData.members.length === 0 && !silent) {
-          setBoardData({
-            tasks: [
-              {
-                id: 'task-1',
-                title: '基礎工事（コンクリート打設）',
-                category: '一般工事',
-                startDate: new Date().toISOString().split('T')[0],
-                endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                progress: 30,
-                status: 'in_progress',
-                assignees: ['member-1'],
-                notes: '養生期間を考慮しつつ円滑に進める。',
-                order: 1
-              },
-              {
-                id: 'task-2',
-                title: '鉄骨建て方・外壁下地',
-                category: '鉄骨工事',
-                startDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                progress: 0,
-                status: 'not_started',
-                assignees: ['member-2'],
-                notes: '高所作業のため安全帯の使用を徹底。',
-                order: 2
-              }
-            ],
-            members: [
-              { id: 'member-1', name: '佐藤 健二', role: '現場監督', color: 'bg-blue-600', phone: '090-1234-5678' },
-              { id: 'member-2', name: '鈴木 祥太', role: '大工職長', color: 'bg-rose-600', phone: '080-9876-5432' }
-            ],
-            logs: []
-          });
+        // Supabase未設定時は、Expressバックエンドへのデータ問い合わせを行うように修正。これにより他端末と完全に同期されるようになります
+        const res = await fetch('/api/board');
+        if (res.ok) {
+          const data = await res.json();
+          setBoardData(data);
+          setErrorMsg(null);
+          setSyncTime(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        } else {
+          throw new Error('Expressサーバーからのデータ取得に失敗しました');
         }
-        setErrorMsg(null);
-        setSyncTime(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg('データ通信に問題が発生しました。インターネット接続と、サーバー起動をご確認ください。');
+      console.error('Board data sync error:', err);
+      let detailedMsg = '';
+      if (isSupabaseConfigured) {
+        if (err.code === '42P01' || (err.message && (err.message.includes('relation') || err.message.includes('does not exist')))) {
+          detailedMsg = `【Supabase初期設定未完了】
+Supabaseデータベース内に「tasks」「members」「update_logs」テーブルのいずれかが見つかりません。
+
+【解決手順（超簡単2分）】:
+1. プロジェクトのルートディレクトリ（ファイルツリー）から「supabase-schema.sql」ファイルを開きます。
+2. その中身（64行ほど）をすべてコピーします。
+3. Supabaseダッシュボード（https://supabase.com/dashboard/）を開き、本プロジェクトを選択します。
+4. 左メニューから「SQL Editor」を選択し、「New query」ボタンを押して新規ウィンドウを開きます。
+5. 先ほどコピーしたSQLを貼り付けて、右下の「Run」ボタンを実行してください。
+これによりテーブルとRLSポリシーが数秒で作成され、即座に他端末との完全リアルタイム同期が開始します！`;
+        } else if (err.status === 401 || err.code === 'PGRST301' || (err.message && (err.message.includes('JWT') || err.message.includes('key') || err.message.includes('Invalid API key')))) {
+          detailedMsg = `【Supabase認証エラー】
+登録されている Supabase API Key（anon key）または URL が無効、あるいは違っています。
+
+【解決手順】:
+AI Studio 開発環境の Settings（環境変数設定）にある「VITE_SUPABASE_URL」と「VITE_SUPABASE_ANON_KEY」が、Supabaseダッシュボードの「Project Settings」->「API」に表示されているものと完全に一致しているか、もう一度お確かめください。`;
+        } else {
+          detailedMsg = `【Supabaseエラー詳細】
+エラー内容: ${err.message || '不明なエラー'}
+エラーコード: ${err.code || err.status || 'N/A'}
+詳細: ${err.details || err.hint || 'なし'}
+
+※テーブル作成およびRLSセキュリティーポリシーが許可されているかご確認ください。`;
+        }
+      } else {
+        detailedMsg = `【ローカルサーバー同期エラー】
+Expressバックエンド（/api/board）との接続に失敗しました。
+
+【解決手順】:
+本コンテナは常時稼働していますが、一時的なネットワーク障害の可能性があります。しばらく置いてページをリロードするか、デベロッパーサーバーの再起動をお試しください。`;
+      }
+      setErrorMsg(detailedMsg);
       triggerToast('サーバーとの同期に失敗しました', 'error');
     } finally {
       if (!silent) setLoading(false);
@@ -261,96 +267,24 @@ export default function App() {
         triggerToast(isEditing ? '工程を更新しました！' : '新しい工程をホワイトボードに貼り付けました！', 'success');
         fetchBoardData(true);
       } else {
-        // Local in-memory fallback
-        let updatedTasks = [...boardData.tasks];
-        let finalStatus = taskData.status;
-        let finalProgress = taskData.progress;
-        
+        // Express バックエンド API
         if (isEditing) {
-          const oldTask = boardData.tasks.find(t => t.id === taskData.id);
-          const oldStatus = oldTask ? oldTask.status : 'not_started';
-          const oldProgress = oldTask ? oldTask.progress : 0;
-
-          if (taskData.progress !== undefined && taskData.status === undefined) {
-            if (taskData.progress === 100) {
-              finalStatus = 'completed';
-            } else if (taskData.progress > 0 && oldStatus === 'not_started') {
-              finalStatus = 'in_progress';
-            } else if (taskData.progress === 0 && oldStatus === 'in_progress') {
-              finalStatus = 'not_started';
-            }
-          } else if (taskData.status !== undefined && taskData.progress === undefined) {
-            if (taskData.status === 'completed') {
-              finalProgress = 100;
-            } else if (taskData.status === 'not_started') {
-              finalProgress = 0;
-            }
-          }
-
-          updatedTasks = updatedTasks.map(t => {
-            if (t.id === taskData.id) {
-              return {
-                ...t,
-                ...taskData,
-                status: finalStatus || t.status,
-                progress: finalProgress !== undefined ? Number(finalProgress) : t.progress,
-              } as Task;
-            }
-            return t;
+          const res = await fetch(`/api/tasks/${taskData.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData),
           });
-
-          // Create localized in-memory update logs
-          const statusChanged = oldStatus !== finalStatus && finalStatus !== undefined;
-          const progressChanged = oldProgress !== finalProgress && finalProgress !== undefined;
-          let newLogs = [...boardData.logs];
-          
-          if (statusChanged || progressChanged) {
-            let editorName = '現場チーム員';
-            if (taskData.assignees && taskData.assignees.length > 0) {
-              const primaryAssignee = boardData.members.find(m => m.id === taskData.assignees![0]);
-              if (primaryAssignee) editorName = primaryAssignee.name;
-            }
-
-            const newLog: UpdateLog = {
-              id: 'log-' + Math.random().toString(36).substring(2, 9),
-              taskId: taskData.id!,
-              taskTitle: taskData.title || oldTask?.title || '工程',
-              memberName: editorName,
-              prevStatus: oldStatus,
-              newStatus: finalStatus || oldStatus,
-              prevProgress: oldProgress,
-              newProgress: finalProgress !== undefined ? finalProgress : oldProgress,
-              timestamp: new Date().toISOString()
-            };
-            newLogs = [newLog, ...newLogs].slice(0, 100);
-          }
-
-          setBoardData(prev => ({
-            ...prev,
-            tasks: updatedTasks,
-            logs: newLogs
-          }));
+          if (!res.ok) throw new Error('工程の更新に失敗しました。');
         } else {
-          const nextOrder = boardData.tasks.length > 0 ? Math.max(...boardData.tasks.map(t => t.order)) + 1 : 1;
-          const newTask: Task = {
-            id: 'task-' + Math.random().toString(36).substring(2, 9),
-            title: taskData.title || '新しい工程',
-            category: taskData.category || '一般工事',
-            startDate: taskData.startDate || new Date().toISOString().split('T')[0],
-            endDate: taskData.endDate || new Date().toISOString().split('T')[0],
-            progress: Number(taskData.progress) || 0,
-            status: taskData.status || 'not_started',
-            assignees: taskData.assignees || [],
-            notes: taskData.notes || '',
-            order: nextOrder
-          };
-          setBoardData(prev => ({
-            ...prev,
-            tasks: [...prev.tasks, newTask]
-          }));
+          const res = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData),
+          });
+          if (!res.ok) throw new Error('工程の追加に失敗しました。');
         }
-
         triggerToast(isEditing ? '工程を更新しました！' : '新しい工程をホワイトボードに貼り付けました！', 'success');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast(err.message || '保存できませんでした。', 'error');
@@ -394,43 +328,15 @@ export default function App() {
         triggerToast('現場からの進捗を即時保存・共有しました！', 'success');
         fetchBoardData(true);
       } else {
-        // Local in-memory quick status update
-        const oldTask = boardData.tasks.find(t => t.id === taskId);
-        const oldStatus = oldTask ? oldTask.status : 'not_started';
-        const oldProgress = oldTask ? oldTask.progress : 0;
-
-        const updatedTasks = boardData.tasks.map(t => {
-          if (t.id === taskId) {
-            return { ...t, progress, status };
-          }
-          return t;
+        // Express バックエンド API
+        const res = await fetch(`/api/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ progress, status }),
         });
-
-        let editorName = '現場チーム員';
-        if (oldTask && oldTask.assignees.length > 0) {
-          const primaryAssignee = boardData.members.find(m => m.id === oldTask.assignees[0]);
-          if (primaryAssignee) editorName = primaryAssignee.name;
-        }
-
-        const newLog: UpdateLog = {
-          id: 'log-' + Math.random().toString(36).substring(2, 9),
-          taskId: taskId,
-          taskTitle: oldTask ? oldTask.title : '工程',
-          memberName: editorName,
-          prevStatus: oldStatus,
-          newStatus: status,
-          prevProgress: oldProgress,
-          newProgress: progress,
-          timestamp: new Date().toISOString()
-        };
-
-        setBoardData(prev => ({
-          ...prev,
-          tasks: updatedTasks,
-          logs: [newLog, ...prev.logs].slice(0, 100)
-        }));
-
+        if (!res.ok) throw new Error('進捗の更新に失敗しました。');
         triggerToast('現場からの進捗を即時保存・共有しました！', 'success');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('更新に失敗しました。', 'error');
@@ -454,12 +360,13 @@ export default function App() {
         triggerToast('工程をホワイトボードから取り外しました。', 'info');
         fetchBoardData(true);
       } else {
-        // Local in-memory delete
-        setBoardData(prev => ({
-          ...prev,
-          tasks: prev.tasks.filter(t => t.id !== id)
-        }));
+        // Express バックエンド API
+        const res = await fetch(`/api/tasks/${id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('工程の削除に失敗しました。');
         triggerToast('工程をホワイトボードから取り外しました。', 'info');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('削除に失敗しました。', 'error');
@@ -497,37 +404,15 @@ export default function App() {
         triggerToast(`${name}さんを現場名簿に登録しました！`, 'success');
         fetchBoardData(true);
       } else {
-        // Local in-memory member add
-        const colors = [
-          'bg-slate-600',
-          'bg-rose-600',
-          'bg-amber-600',
-          'bg-emerald-600',
-          'bg-blue-600',
-          'bg-indigo-600',
-          'bg-purple-600',
-          'bg-pink-600',
-          'bg-yellow-500',
-          'bg-teal-600',
-        ];
-        const usedColors = boardData.members.map((m) => m.color);
-        const availableColors = colors.filter((c) => !usedColors.includes(c));
-        const chosenColor = color || (availableColors.length > 0 ? availableColors[0] : colors[Math.floor(Math.random() * colors.length)]);
-
-        const newMember: Member = {
-          id: 'member-' + Math.random().toString(36).substring(2, 9),
-          name: name,
-          role: role,
-          phone: phone || '',
-          color: chosenColor
-        };
-
-        setBoardData(prev => ({
-          ...prev,
-          members: [...prev.members, newMember]
-        }));
-
+        // Express バックエンド API
+        const res = await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, role, phone, color }),
+        });
+        if (!res.ok) throw new Error('担当者の登録に失敗しました。');
         triggerToast(`${name}さんを現場名簿に登録しました！`, 'success');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('追加に失敗しました。', 'error');
@@ -550,20 +435,15 @@ export default function App() {
         triggerToast('メンバー情報を変更しました。', 'success');
         fetchBoardData(true);
       } else {
-        // Local in-memory member update
-        const updatedMembers = boardData.members.map(m => {
-          if (m.id === id) {
-            return { ...m, name, role, phone, color: color || m.color };
-          }
-          return m;
+        // Express バックエンド API
+        const res = await fetch(`/api/members/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, role, phone, color }),
         });
-
-        setBoardData(prev => ({
-          ...prev,
-          members: updatedMembers
-        }));
-
+        if (!res.ok) throw new Error('担当者情報の更新に失敗しました。');
         triggerToast('メンバー情報を変更しました。', 'success');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('更新に失敗しました。', 'error');
@@ -598,54 +478,18 @@ export default function App() {
         triggerToast('メンバーを削除し、工程の割り当てを解除しました。', 'info');
         fetchBoardData(true);
       } else {
-        // Local in-memory member delete & unlink from tasks
-        const updatedMembers = boardData.members.filter(m => m.id !== id);
-        const updatedTasks = boardData.tasks.map(t => {
-          if (t.assignees.includes(id)) {
-            return {
-              ...t,
-              assignees: t.assignees.filter(memberId => memberId !== id)
-            };
-          }
-          return t;
+        // Express バックエンド API
+        const res = await fetch(`/api/members/${id}`, {
+          method: 'DELETE',
         });
-
-        setBoardData(prev => ({
-          ...prev,
-          members: updatedMembers,
-          tasks: updatedTasks
-        }));
-
+        if (!res.ok) throw new Error('担当者の削除に失敗しました。');
         triggerToast('メンバーを削除し、工程の割り当てを解除しました。', 'info');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('削除に失敗しました。', 'error');
     } finally {
       setSyncing(false);
-    }
-  };
-
-  // Reset demo defaults state in one click (for showcasing and diagnostics)
-  const handleResetDemo = async () => {
-    setLoading(true);
-    try {
-      if (isSupabaseConfigured && supabase) {
-        // Safe clear logic in dev playground
-        await supabase.from('tasks').delete().neq('id', 'dummy');
-        await supabase.from('members').delete().neq('id', 'dummy');
-        await supabase.from('update_logs').delete().neq('id', 'dummy');
-
-        setBoardData({ tasks: [], members: [], logs: [] });
-        triggerToast('工程表の全データをクリアしました。', 'success');
-      } else {
-        // Reset local memory board completely back to empty
-        setBoardData({ tasks: [], members: [], logs: [] });
-        triggerToast('工程表の全データをクリアしました。', 'success');
-      }
-    } catch (err: any) {
-      triggerToast('初期化に失敗しました。', 'error');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -659,11 +503,13 @@ export default function App() {
         triggerToast('すべての進捗履歴ログを消去しました。', 'info');
         fetchBoardData(true);
       } else {
-        setBoardData(prev => ({
-          ...prev,
-          logs: []
-        }));
+        // Express バックエンド API
+        const res = await fetch('/api/logs', {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('ログの消去に失敗しました。');
         triggerToast('すべての進捗履歴ログを消去しました。', 'info');
+        fetchBoardData(true);
       }
     } catch (err: any) {
       triggerToast('ログの消去に失敗しました。', 'error');
@@ -704,7 +550,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">
-                渋谷マンション修繕プロジェクト &middot; 小規模工事現場向けDX
+                小規模工事現場向けDX
               </p>
             </div>
           </div>
@@ -712,7 +558,7 @@ export default function App() {
           {/* Sync status pills & Manual View overrides */}
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
             {/* Supabase Database Connection Status */}
-            {isSupabaseConfigured && (
+            {isSupabaseConfigured ? (
               <div
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-extrabold border bg-emerald-50 text-emerald-800 border-emerald-200"
                 style={{ contentVisibility: 'auto' }}
@@ -720,6 +566,14 @@ export default function App() {
               >
                 <Database className="w-3.5 h-3.5 shrink-0" />
                 <span>Supabase同期中</span>
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border bg-blue-50 text-blue-800 border-blue-200"
+                title="ローカル Express データベースと同期中 (マルチデバイス対応)"
+              >
+                <Server className="w-3.5 h-3.5 shrink-0" />
+                <span>ローカルサーバー同期</span>
               </div>
             )}
 
@@ -770,6 +624,50 @@ export default function App() {
       {/* 🔵 Main App Container Canvas */}
       <main className="max-w-7xl mx-auto px-4 pt-5 w-full flex-grow">
         
+        {/* Connection/Synchronization Diagnostics Overlay */}
+        {errorMsg && (
+          <div className="bg-rose-50 border-2 border-rose-200 text-rose-900 p-5 mb-6 rounded-2xl shadow-md flex flex-col md:flex-row items-start gap-4">
+            <div className="bg-rose-100 border border-rose-200 p-3 rounded-xl text-rose-600 shrink-0 mx-auto md:mx-0">
+              <CloudLightning className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-2 flex-grow">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-sm font-extrabold text-rose-800 flex items-center gap-1.5 justify-center md:justify-start">
+                  <span>⚠️ 同期システムエラーが発生しています</span>
+                </h4>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-rose-250 text-rose-800 border border-rose-200">
+                    {isSupabaseConfigured ? 'Supabase同期モード' : 'ローカル同期モード'}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs leading-relaxed text-rose-850 whitespace-pre-wrap font-medium">
+                {errorMsg}
+              </p>
+              <div className="pt-2 flex flex-wrap gap-3 items-center">
+                <button
+                  onClick={() => fetchBoardData(false)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 transition-all text-white text-[11px] font-extrabold shadow-sm active:scale-95"
+                >
+                  📡 接続を再試行する
+                </button>
+                <button
+                  onClick={() => setErrorMsg(null)}
+                  className="px-3 py-1.5 rounded-lg text-rose-500 hover:bg-rose-100 transition-all text-[11px] font-bold"
+                >
+                  一時的に閉じる
+                </button>
+                
+                {!isSupabaseConfigured && (
+                  <p className="text-[10px] text-slate-500 font-bold">
+                    ※ 異なるスマホ・パソコン間で同一データを完全にリアルタイム共有するには、環境設定に Supabase を記述することをお勧めします。
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Banner Announcement of Priority Goals */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 mb-5 flex flex-col md:flex-row items-start md:items-center gap-4 shadow-sm">
           <div className="bg-blue-50 border border-blue-100 p-2.5 rounded-lg shrink-0 text-blue-600">
@@ -799,7 +697,6 @@ export default function App() {
           members={boardData.members}
           logs={boardData.logs}
           onRefresh={() => fetchBoardData(false)}
-          onResetDemo={handleResetDemo}
           onClearLogs={handleClearLogs}
         />
 
