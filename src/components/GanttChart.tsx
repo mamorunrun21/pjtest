@@ -69,6 +69,10 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
   // Check overlap helper to place bar
   const calculateTaskSpan = (task: Task) => {
+    if (task.startDate === '1970-01-01' || task.endDate === '1970-01-01') {
+      return null;
+    }
+
     const startIndex = dateColumns.indexOf(task.startDate);
     const endIndex = dateColumns.indexOf(task.endDate);
 
@@ -184,12 +188,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
           {/* Rows of tasks */}
           <div className="divide-y divide-slate-150 bg-white">
-            {tasks.length === 0 ? (
+            {tasks.filter((t) => t.startDate !== '1970-01-01').length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-400">
-                工程が登録されていません。「工程追加」ボタンから最初の工程を設置してください。
+                現在、期間予定のある工程は登録されていません。上の「工程追加」か下の未定項目にて日程をセットしてください。
               </div>
             ) : (
               tasks
+                .filter((t) => t.startDate !== '1970-01-01')
                 .sort((a, b) => a.order - b.order)
                 .map((task) => {
                   const spanInfo = calculateTaskSpan(task);
@@ -201,20 +206,22 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                       className="grid grid-cols-[200px_100px_1fr] leading-none text-xs hover:bg-slate-50/60 divide-x divide-slate-100 group transition-all duration-300 relative cursor-pointer"
                     >
                       {/* Task Info Cell */}
-                      <div className="p-3 pl-4 flex flex-col justify-center gap-1">
-                        <div className="inline-flex items-center gap-1">
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-medium border border-slate-250">
-                            {task.category}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-medium font-mono">
+                      <div className="p-3 pl-4 flex flex-col justify-center gap-1.5">
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {task.category.split(',').map((cat) => (
+                            <span key={cat} className="text-[9.5px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded font-extrabold border border-slate-200">
+                              {cat}
+                            </span>
+                          ))}
+                          <span className="text-[10px] text-slate-400 font-bold font-mono ml-1">
                             {Math.round(task.progress)}%
                           </span>
                         </div>
-                        <div className="font-semibold text-slate-800 line-clamp-1 group-hover:text-blue-600 transition truncate" title={task.title}>
+                        <div className="font-extrabold text-slate-800 line-clamp-1 group-hover:text-blue-600 transition truncate" title={task.title}>
                           {task.title}
                         </div>
-                        <div className="text-[9px] text-slate-400">
-                          {task.startDate.substring(5)} 〜 {task.endDate.substring(5)}
+                        <div className="text-[9px] text-slate-450 font-semibold font-mono">
+                          {task.startDate.substring(5).replace('-', '/')} 〜 {task.endDate.substring(5).replace('-', '/')}
                         </div>
                       </div>
 
@@ -309,6 +316,101 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 }))}
           </div>
         </div>
+      </div>
+
+      {/* 📌 New Section: Undecided/TBD Tasks Magnet Board */}
+      <div id="undecided-tasks-board" className="mt-6 pt-5 border-t border-slate-200">
+        <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center gap-2">
+            <span className="p-1 px-1.5 text-xs bg-amber-100 text-amber-800 rounded-lg font-bold">📌 着手日未定</span>
+            <h3 className="text-sm font-extrabold text-slate-850">
+              日程未定項目・マグネットボード
+            </h3>
+            <span className="text-[10.5px] font-semibold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-205">
+              {tasks.filter((t) => t.startDate === '1970-01-01').length} 件
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 font-bold hidden sm:block">
+            ※ タップすると、日程（予定日）の割り当てや進捗状態の編集ができます。
+          </p>
+        </div>
+
+        {tasks.filter((t) => t.startDate === '1970-01-01').length === 0 ? (
+          <div className="bg-slate-50 rounded-xl p-5 text-center text-xs text-slate-400 border border-dashed border-slate-200">
+            着手日未定に登録された工程はありません。「工程追加」または既存工程の編集から「着手日未定」にチェックを入れてこちらに仮置きできます。
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+            {tasks
+              .filter((t) => t.startDate === '1970-01-01')
+              .sort((a, b) => a.order - b.order)
+              .map((undecidedTask) => {
+                const statusConfig: Record<TaskStatus, { label: string; text: string; bg: string; border: string }> = {
+                  not_started: { label: '未着手', text: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' },
+                  in_progress: { label: '着手中', text: 'text-blue-600', bg: 'bg-blue-50/60', border: 'border-blue-200' },
+                  completed: { label: '完了', text: 'text-emerald-700', bg: 'bg-emerald-50/60', border: 'border-emerald-200' },
+                  delayed: { label: '調整中', text: 'text-rose-600', bg: 'bg-rose-50/60 border-rose-200', border: 'border-rose-450' },
+                };
+                const config = statusConfig[undecidedTask.status];
+
+                return (
+                  <div
+                    key={undecidedTask.id}
+                    onClick={() => onEditTask(undecidedTask)}
+                    className="group bg-amber-50/20 hover:bg-amber-50/40 border-2 border-dashed border-amber-200 hover:border-amber-300 rounded-xl p-3.5 cursor-pointer shadow-sm transition hover:scale-[1.01] active:scale-95 flex flex-col justify-between min-h-[115px]"
+                  >
+                    <div>
+                      {/* Categories row */}
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {undecidedTask.category.split(',').map((cat) => (
+                          <span key={cat} className="text-[9px] bg-white border border-amber-200 text-amber-800 font-extrabold px-1.5 py-0.5 rounded">
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* Title */}
+                      <h4 className="text-xs font-extrabold text-slate-800 line-clamp-2 leading-snug group-hover:text-blue-600 transition mb-2">
+                        {undecidedTask.title}
+                      </h4>
+                    </div>
+
+                    {/* Footer assignees & info */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100/60 text-[10px] text-slate-400">
+                      <div className="flex items-center gap-1">
+                        <div className="flex -space-x-1.5">
+                          {undecidedTask.assignees.length === 0 ? (
+                            <span className="w-4 h-4 rounded-full border border-slate-200 bg-white text-slate-400 flex items-center justify-center text-[8px] font-bold">
+                              未
+                            </span>
+                          ) : (
+                            undecidedTask.assignees.map((aId) => (
+                              <div
+                                key={aId}
+                                className={`w-4.5 h-4.5 rounded-full text-white font-black flex items-center justify-center text-[7.5px] border border-white uppercase ${getMemberColor(aId)}`}
+                                title={getMemberName(aId)}
+                              >
+                                {getMemberInitials(aId)}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {undecidedTask.assignees.length > 0 && (
+                          <span className="text-[9px] text-slate-500 font-bold truncate max-w-[60px]">
+                            {getMemberName(undecidedTask.assignees[0]).split(' ')[0]}
+                          </span>
+                        )}
+                      </div>
+
+                      <span className={`px-1.5 py-0.5 text-[9px] font-extrabold rounded-md border ${config.bg} ${config.text} ${config.border}`}>
+                        {undecidedTask.status === 'in_progress' ? `${undecidedTask.progress}%` : config.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
     </div>
   );
