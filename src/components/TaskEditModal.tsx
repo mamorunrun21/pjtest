@@ -27,7 +27,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
   // Form fields
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('木工事');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(['木工事']);
+  const [isUndecided, setIsUndecided] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [progress, setProgress] = useState<number>(0);
@@ -51,6 +52,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     '住宅設備',
     '外部足場',
     '検査クリーニング',
+    '営業',
+    '塗装',
     'その他',
   ];
 
@@ -59,9 +62,16 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     setConfirmDelete(false);
     if (task) {
       setTitle(task.title);
-      setCategory(task.category);
-      setStartDate(task.startDate);
-      setEndDate(task.endDate);
+      
+      // Parse multi-category from comma separated string
+      const cats = task.category ? task.category.split(',').map(c => c.trim()).filter(Boolean) : [];
+      setSelectedCategories(cats.length > 0 ? cats : ['木工事']);
+
+      const undecided = task.startDate === '1970-01-01';
+      setIsUndecided(undecided);
+      setStartDate(undecided ? '' : task.startDate);
+      setEndDate(undecided ? '' : task.endDate);
+
       setProgress(task.progress);
       setStatus(task.status);
       setAssignees(task.assignees || []);
@@ -70,7 +80,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     } else {
       // Set future-centric dates for new tasks by default centered on our active period
       setTitle('');
-      setCategory('木工事');
+      setSelectedCategories(['木工事']);
+      setIsUndecided(false);
       setStartDate('2026-06-16');
       setEndDate('2026-06-19');
       setProgress(0);
@@ -80,6 +91,19 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
       setOrder(1);
     }
   }, [task]);
+
+  const handleToggleCategory = (catName: string) => {
+    setSelectedCategories((prev) => {
+      // Toggle logic for multi-selection
+      if (prev.includes(catName)) {
+        // Keep at least one category selected
+        const next = prev.filter((c) => c !== catName);
+        return next.length > 0 ? next : [catName];
+      } else {
+        return [...prev, catName];
+      }
+    });
+  };
 
   const handleToggleAssignee = (mId: string) => {
     setAssignees((prev) =>
@@ -119,9 +143,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     onSave({
       id: task?.id,
       title: title.trim(),
-      category,
-      startDate,
-      endDate,
+      category: selectedCategories.join(','),
+      startDate: isUndecided ? '1970-01-01' : startDate,
+      endDate: isUndecided ? '1970-01-01' : endDate,
       progress,
       status,
       assignees,
@@ -173,41 +197,64 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
           {/* Category Quick Choices */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-500 block">工種（カテゴリー）</label>
+            <label className="text-[11px] font-bold text-slate-500 block">工種（カテゴリー・複数選択可）</label>
             <div className="flex flex-wrap gap-1">
-              {categoriesList.map((catName) => (
-                <button
-                  key={catName}
-                  type="button"
-                  onClick={() => setCategory(catName)}
-                  className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold transition ${category === catName ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
-                >
-                  {catName}
-                </button>
-              ))}
+              {categoriesList.map((catName) => {
+                const isSelected = selectedCategories.includes(catName);
+                return (
+                  <button
+                    key={catName}
+                    type="button"
+                    onClick={() => handleToggleCategory(catName)}
+                    className={`text-[10px] px-2.5 py-1 rounded-lg border font-bold transition ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {catName}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
+          {/* Undertermined dates toggle */}
+          <div className="flex items-center gap-2 bg-amber-50/50 border border-amber-100/70 p-3 rounded-lg">
+            <input
+              type="checkbox"
+              id="undecided-checkbox"
+              checked={isUndecided}
+              onChange={(e) => setIsUndecided(e.target.checked)}
+              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="undecided-checkbox" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+              📅 この工程を着手日未定（日程未定項目）として登録する
+            </label>
+          </div>
+
           {/* Start and End date row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid grid-cols-2 gap-3 transition-opacity ${isUndecided ? 'opacity-40' : ''}`}>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-slate-500 block">着手(開始)予定日</label>
               <input
                 type="date"
-                required
+                required={!isUndecided}
+                disabled={isUndecided}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 disabled:bg-slate-150 disabled:text-slate-400 focus:outline-none"
               />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-slate-500 block">完了予定日</label>
               <input
                 type="date"
-                required
+                required={!isUndecided}
+                disabled={isUndecided}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 disabled:bg-slate-150 disabled:text-slate-400 focus:outline-none"
               />
             </div>
           </div>
