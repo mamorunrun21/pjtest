@@ -13,7 +13,6 @@ interface DashboardStatsProps {
   members: Member[];
   logs: UpdateLog[];
   onRefresh: () => void;
-  onResetDemo: () => void;
   onClearLogs: () => void;
 }
 
@@ -22,10 +21,8 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
   members,
   logs,
   onRefresh,
-  onResetDemo,
   onClearLogs,
 }) => {
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Statistics Calculations
@@ -62,46 +59,16 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
             <ListTodo className="w-4 h-4 text-slate-400" />
             全体の進捗状況
           </span>
-          {showResetConfirm ? (
-            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-150 p-1 rounded-lg animate-[fadeIn_0.1s_ease-out]">
-              <span className="text-[10px] text-rose-700 font-bold whitespace-nowrap">工程表を復元？</span>
-              <button
-                type="button"
-                onClick={() => {
-                  onResetDemo();
-                  setShowResetConfirm(false);
-                }}
-                className="px-1.5 py-0.5 bg-rose-600 text-white hover:bg-rose-700 rounded font-bold text-[9.5px] cursor-pointer"
-              >
-                はい
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowResetConfirm(false)}
-                className="px-1.5 py-0.5 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-bold text-[9.5px] cursor-pointer"
-              >
-                戻る
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={onRefresh}
-                className="p-1 px-2.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg flex items-center gap-1 border border-slate-200 bg-slate-50 active:scale-95 transition-all cursor-pointer"
-                title="最新データに更新"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                同期
-              </button>
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                className="p-1 px-2 text-xs text-rose-550 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-100 bg-rose-50/55 active:scale-95 transition-all cursor-pointer"
-                title="デモデータを初期状態にリセット"
-              >
-                リセット
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button
+              onClick={onRefresh}
+              className="p-1 px-2.5 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg flex items-center gap-1 border border-slate-200 bg-slate-50 active:scale-95 transition-all cursor-pointer"
+              title="最新データに更新"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              同期
+            </button>
+          </div>
         </div>
 
         <div className="flex items-baseline gap-2 my-2">
