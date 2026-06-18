@@ -160,12 +160,16 @@ export const MobileTaskList: React.FC<MobileTaskListProps> = ({
                 <div className={`absolute top-0 left-0 bottom-0 w-1 ${task.status === 'completed' ? 'bg-emerald-500' : task.status === 'delayed' ? 'bg-red-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-slate-350'}`} />
 
                 {/* Card Top: Details, Date, Assignees */}
-                <div className="pl-1.5">
+                <div className="pl-1.5 font-sans">
                   <div className="flex justify-between items-start gap-2">
-                    <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-250 text-slate-500 select-none shrink-0">
-                      {task.category}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${config.bg} ${config.text} ${config.border}`}>
+                    <div className="flex flex-wrap gap-1 max-w-[170px]">
+                      {task.category.split(',').map((cat) => (
+                        <span key={cat} className="text-[9.5px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-850 select-none">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${config.bg} ${config.text} ${config.border} shrink-0`}>
                       {config.label} ({task.progress}%)
                     </span>
                   </div>
@@ -175,16 +179,23 @@ export const MobileTaskList: React.FC<MobileTaskListProps> = ({
                     {task.title}
                   </h3>
 
-                  {/* Dates Banner */}
-                  <div className="flex items-center gap-1 text-[11px] text-slate-500/90 font-medium mt-1">
-                    <span className="font-semibold text-blue-600">
-                      {formatJapaneseDateWithDay(task.startDate)}
-                    </span>
-                    <span>〜</span>
-                    <span className="font-semibold text-blue-600">
-                      {formatJapaneseDateWithDay(task.endDate)}
-                    </span>
-                  </div>
+                  {/* Dates Banner or Undecided banner */}
+                  {task.startDate === '1970-01-01' ? (
+                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-amber-700/90 mt-1 bg-amber-50/70 border border-amber-200/50 p-1 px-2 rounded-lg w-fit">
+                      <span>📌</span>
+                      <span>着手日未定 (日程未定項目)</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-[11px] text-slate-505 font-medium mt-1">
+                      <span className="font-bold text-blue-600">
+                        {formatJapaneseDateWithDay(task.startDate)}
+                      </span>
+                      <span className="font-bold text-slate-400">〜</span>
+                      <span className="font-bold text-blue-600">
+                        {formatJapaneseDateWithDay(task.endDate)}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Assignee badges layout with Call shortcuts */}
                   <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
